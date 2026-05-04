@@ -1,0 +1,104 @@
+//This code visualizes feedback given to a student or students by way of a green dot under their name in classdojo.
+
+(function() {
+    'use strict';
+
+    const studentMemory = {};
+    const COLORS = { positive: '#4CAF50', negative: '#F44336' };
+
+    console.log("🚀 ClassDojo Script: Bottom-Docked Dots Active");
+
+    const isAttendanceMode = () => {
+        return !!document.querySelector('.attendance-header, [data-name="attendance-save-button"]');
+    };
+
+    const getStudentData = (btn) => {
+        const label = btn.getAttribute('aria-label') || "";
+        const name = label.trim().split(/\s+/).slice(0, 2).join(' ');
+        const pointMatch = label.match(/(-?\d+)\s+points?/i);
+        
+        return { 
+            name, 
+            points: pointMatch ? parseInt(pointMatch[1], 10) : null 
+        };
+    };
+
+    const setupStudent = (button) => {
+        if (button.dataset.observed === 'true') return;
+
+        const { name: studentName, points: initialPoints } = getStudentData(button);
+        if (!studentName) return;
+
+        button.dataset.observed = 'true';
+
+        // Initialize memory
+        if (!studentMemory[studentName]) {
+            studentMemory[studentName] = { lastPoints: initialPoints ?? 0, dots: [] };
+        }
+
+        // UI: Create or find the dot container INSIDE the button
+        let dotContainer = button.querySelector('.dojo-dot-trail');
+        if (!dotContainer) {
+            dotContainer = document.createElement('div');
+            dotContainer.className = 'dojo-dot-trail';
+            // Styling for bottom positioning
+            dotContainer.style.cssText = `
+                display: flex; 
+                flex-wrap: wrap; 
+                justify-content: center;
+                gap: 3px; 
+                padding: 2px 6px;
+                pointer-events: none; 
+                position: absolute; 
+                bottom: 4px; 
+                left: 0; 
+                right: 0;
+                z-index: 10;
+            `;
+            // Ensure the button is the anchor for absolute positioning
+            button.style.position = 'relative';
+            button.appendChild(dotContainer);
+        }
+
+        const redrawDots = () => {
+            dotContainer.innerHTML = '';
+            studentMemory[studentName].dots.forEach(color => {
+                const dot = document.createElement('div');
+                dot.style.cssText = `
+                    width: 6px; 
+                    height: 6px; 
+                    border-radius: 50%; 
+                    background-color: ${color};
+                    box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+                `;
+                dotContainer.appendChild(dot);
+            });
+        };
+        redrawDots();
+
+        const observer = new MutationObserver(() => {
+            if (isAttendanceMode()) return;
+
+            const { points: newPoints } = getStudentData(button);
+            const oldPoints = studentMemory[studentName].lastPoints;
+
+            if (newPoints !== null && newPoints !== oldPoints) {
+                const color = newPoints > oldPoints ? COLORS.positive : COLORS.negative;
+                
+                studentMemory[studentName].lastPoints = newPoints;
+                studentMemory[studentName].dots.push(color);
+                
+                redrawDots();
+                console.log(`📍 ${studentName} updated to ${newPoints} points.`);
+            }
+        });
+
+        observer.observe(button, { attributes: true, attributeFilter: ['aria-label'] });
+    };
+
+    const pageObserver = new MutationObserver(() => {
+        document.querySelectorAll('button[data-name="studentTile"]').forEach(setupStudent);
+    });
+
+    pageObserver.observe(document.body, { childList: true, subtree: true });
+})();
